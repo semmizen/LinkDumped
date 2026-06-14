@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Universal Web Source Grabber</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background: #0a0f1e;
+            font-family: 'Segoe UI', 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            color: #c0e0ff;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: #0e1a2a;
+            padding: 12px 20px;
+            border-left: 5px solid #00ffaa;
+            margin-bottom: 20px;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .input-group input {
+            flex: 3;
+            padding: 12px;
+            background: #11161f;
+            border: 1px solid #2a3a55;
+            color: #00ffcc;
+            font-size: 14px;
+            font-family: monospace;
+            border-radius: 6px;
+        }
+        .input-group button {
+            padding: 12px 24px;
+            background: #1e2a3a;
+            border: 1px solid #00ffaa;
+            color: #00ffaa;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: 0.2s;
+        }
+        .input-group button:hover {
+            background: #00ffaa20;
+        }
+        .panel {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .link-list {
+            flex: 1;
+            min-width: 280px;
+            background: #0c1220;
+            border: 1px solid #1f2c3e;
+            border-radius: 10px;
+            padding: 12px;
+            height: 500px;
+            overflow-y: auto;
+        }
+        .code-view {
+            flex: 2;
+            min-width: 400px;
+            background: #0c1220;
+            border: 1px solid #1f2c3e;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+        .code-header {
+            padding: 10px;
+            background: #07111c;
+            border-bottom: 1px solid #1f2c3e;
+            font-weight: bold;
+        }
+        pre {
+            margin: 0;
+            padding: 12px;
+            background: #01060c;
+            white-space: pre-wrap;
+            word-break: break-all;
+            flex: 1;
+            overflow: auto;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+            color: #b0e0ff;
+        }
+        .link-item {
+            background: #101826;
+            margin-bottom: 8px;
+            padding: 8px;
+            border-left: 3px solid #2a5f8a;
+            border-radius: 4px;
+        }
+        .link-url {
+            font-size: 12px;
+            word-break: break-all;
+            color: #8db5d6;
+        }
+        .link-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .link-actions button {
+            background: #1a2538;
+            border: none;
+            color: #8affdd;
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .status {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #99ccff;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0f1e;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a4c6e;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">🔓 UNIVERSAL SOURCE GRABBER — Hỗ trợ mọi TLD (.com .vn .org .io .xyz ...) | CORS proxy</div>
+
+    <div class="input-group">
+        <input type="text" id="targetUrl" placeholder="http://example.com / https://any-domain.xyz/page" value="https://example.com">
+        <button id="fetchBtn">➕ FETCH & LƯU</button>
+        <button id="clearAllBtn">🗑 XOÁ TẤT CẢ</button>
+    </div>
+
+    <div class="panel">
+        <div class="link-list">
+            <div style="margin-bottom: 10px;">📋 DANH SÁCH MỌI MIỀN ĐÃ LƯU (<span id="linkCount">0</span>)</div>
+            <div id="listContainer">✨ Nhập link và bấm Fetch</div>
+        </div>
+        <div class="code-view">
+            <div class="code-header">📄 MÃ NGUỒN (Click Xem hoặc sau khi fetch)</div>
+            <pre id="output">// Chọn link từ danh sách hoặc fetch mới</pre>
+        </div>
+    </div>
+    <div id="statusMsg" class="status">✅ Sẵn sàng | Hỗ trợ http/https, mọi miền</div>
+</div>
+
+<script>
+    // ----- STATE -----
+    let storedLinks = [];   // mỗi item { id, url, html, timestamp }
+
+    // DOM elements
+    const targetUrlInput = document.getElementById('targetUrl');
+    const fetchBtn = document.getElementById('fetchBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    const listContainer = document.getElementById('listContainer');
+    const outputPre = document.getElementById('output');
+    const linkCountSpan = document.getElementById('linkCount');
+    const statusMsg = document.getElementById('statusMsg');
+
+    // Helper cập nhật UI
+    function renderLinkList() {
+        if (!storedLinks.length) {
+            listContainer.innerHTML = '<div style="color:#667788;">📭 Chưa có link nào. Nhập URL bất kỳ (kể cả .onion không hỗ trợ proxy nhưng vẫn thử).</div>';
+            linkCountSpan.innerText = '0';
+            return;
+        }
+        let html = '';
+        storedLinks.forEach((item, idx) => {
+            let shortUrl = item.url.length > 55 ? item.url.slice(0, 52) + '...' : item.url;
+            html += `
+                <div class="link-item">
+                    <div class="link-url" title="${item.url}">🌐 ${shortUrl}</div>
+                    <div class="link-actions">
+                        <button onclick="viewSourceById(${item.id})">👁 Xem code</button>
+                        <button onclick="downloadSourceById(${item.id})">⬇ Tải .txt</button>
+                        <button onclick="deleteLinkById(${item.id})">❌ Xóa</button>
+                    </div>
+                </div>
+            `;
+        });
+        listContainer.innerHTML = html;
+        linkCountSpan.innerText = storedLinks.length;
+    }
+
+    // Fetch với CORS proxy + hỗ trợ mọi miền (allorigins)
+    async function fetchAnyDomain(url) {
+        const proxy = 'https://api.allorigins.win/raw?url=';
+        const encoded = encodeURIComponent(url);
+        const finalUrl = proxy + encoded;
+        const response = await fetch(finalUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status} - Có thể do chặn hoặc domain không tồn tại`);
+        return await response.text();
+    }
+
+    // Thêm link và fetch
+    async function addAndFetch(urlToFetch = null) {
+        let url = urlToFetch !== null ? urlToFetch : targetUrlInput.value.trim();
+        if (!url) {
+            statusMsg.innerText = '⚠️ Lỗi: URL rỗng';
+            return;
+        }
+        // chuẩn hóa sơ bộ: thêm https:// nếu thiếu
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            url = 'https://' + url;
+        }
+        statusMsg.innerText = `⏳ Đang fetch: ${url} ...`;
+        outputPre.innerText = `Đang tải từ ${url} ...`;
+        try {
+            const htmlContent = await fetchAnyDomain(url);
+            // Lưu với id unique
+            const newId = Date.now() + Math.floor(Math.random() * 10000);
+            storedLinks.unshift({   // thêm lên đầu
+                id: newId,
+                url: url,
+                html: htmlContent,
+                timestamp: new Date().toISOString()
+            });
+            renderLinkList();
+            outputPre.innerText = htmlContent;
+            statusMsg.innerText = `✅ Thành công: ${url} (${htmlContent.length} ký tự)`;
+            targetUrlInput.value = ''; // clear
+        } catch (err) {
+            statusMsg.innerText = `❌ FAIL: ${url} -> ${err.message}`;
+            outputPre.innerText = `LỖI khi lấy ${url}\n${err.message}\n\nLưu ý: Một số web chặn proxy hoặc không hỗ trợ CORS.`;
+        }
+    }
+
+    // Xem source theo id
+    window.viewSourceById = function(id) {
+        const item = storedLinks.find(i => i.id === id);
+        if (item) {
+            outputPre.innerText = item.html;
+            statusMsg.innerText = `📄 Đang xem: ${item.url}`;
+        } else {
+            statusMsg.innerText = 'Không tìm thấy link';
+        }
+    };
+
+    // Tải file download
+    window.downloadSourceById = function(id) {
+        const item = storedLinks.find(i => i.id === id);
+        if (!item) return;
+        const blob = new Blob([item.html], {type: 'text/plain'});
+        const a = document.createElement('a');
+        let safeName = item.url.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 60);
+        a.download = `source_${safeName}_${item.id}.txt`;
+        a.href = URL.createObjectURL(blob);
+        a.click();
+        URL.revokeObjectURL(a.href);
+        statusMsg.innerText = `⬇ Đã tải: ${item.url}`;
+    };
+
+    // Xóa link theo id
+    window.deleteLinkById = function(id) {
+        storedLinks = storedLinks.filter(i => i.id !== id);
+        renderLinkList();
+        if (storedLinks.length === 0) {
+            outputPre.innerText = '// Danh sách trống. Fetch link mới.';
+        }
+        statusMsg.innerText = '🗑 Đã xóa một link';
+    };
+
+    // Xóa hết
+    function clearAll() {
+        if (storedLinks.length && confirm('Xóa toàn bộ link đã lưu?')) {
+            storedLinks = [];
+            renderLinkList();
+            outputPre.innerText = '// Đã xóa hết dữ liệu';
+            statusMsg.innerText = '🧹 Toàn bộ link đã bị xóa';
+        }
+    }
+
+    // Bắt sự kiện
+    fetchBtn.addEventListener('click', () => addAndFetch());
+    clearAllBtn.addEventListener('click', clearAll);
+
+    // Enter trên input
+    targetUrlInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addAndFetch();
+    });
+
+    // demo có sẵn 1 link mẫu để test UI không bị fail
+    (function initDemo() {
+        storedLinks.push({
+            id: 1000001,
+            url: 'https://example.com',
+            html: '<!DOCTYPE html>\n<html>\n<head><title>Example Domain</title></head>\n<body>\n<h1>Demo test - UI hoạt động hoàn hảo</h1>\n<p>Đây là mã nguồn mẫu.</p>\n</body>\n</html>',
+            timestamp: new Date().toISOString()
+        });
+        renderLinkList();
+        outputPre.innerText = storedLinks[0].html;
+        statusMsg.innerText = '✅ UI nâng cấp, font rõ, dark mode, hỗ trợ mọi miền | Proxy allorigins';
+    })();
+</script>
+</body>
+  </html>
